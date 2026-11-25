@@ -1,21 +1,33 @@
+
 import { useEffect, useState } from "react";
 import axios from "axios";
-import "./App.css";
 
 const API = "http://localhost:5000/api/students";
 
 function App() {
   const [students, setStudents] = useState([]);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [course, setCourse] = useState("");
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+  });
+  const [editId, setEditId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
+  // GET students
   const fetchStudents = async () => {
     try {
-      const res = await axios.get(API);
-      setStudents(res.data);
-    } catch (error) {
-      console.error("Failed to fetch students", error);
+      setLoading(true);
+      setError("");
+
+      const response = await axios.get(API);
+      setStudents(response.data);
+    } catch (err) {
+      console.error(err);
+      setError("Unable to load students. Check backend server.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -23,103 +35,194 @@ function App() {
     fetchStudents();
   }, []);
 
-  const addStudent = async (e) => {
-    e.preventDefault();
+  // Input change
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
-    if (!name || !email || !course) {
-      alert("Please fill in all fields");
+  // Add / Update
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!formData.name || !formData.email || !formData.phone) {
+      setError("Please fill in all fields.");
       return;
     }
 
     try {
-      await axios.post(API, { name, email, course });
+      if (editId) {
+        await axios.put(`${API}/${editId}`, formData);
+      } else {
+        await axios.post(API, formData);
+      }
 
-      setName("");
-      setEmail("");
-      setCourse("");
+      setFormData({
+        name: "",
+        email: "",
+        phone: "",
+      });
 
-      fetchStudents();
-    } catch (error) {
-      alert("Failed to add student");
+      setEditId(null);
+
+      await fetchStudents();
+    } catch (err) {
+      console.error("Submit error:", err.response?.data || err.message);
+      setError(
+        err.response?.data?.message || "Something went wrong."
+      );
     }
   };
 
-  const deleteStudent = async (id) => {
+  // Edit
+  const handleEdit = (student) => {
+    setFormData({
+      name: student.name,
+      email: student.email,
+      phone: student.phone,
+    });
+
+    setEditId(student._id);
+    setError("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  // Cancel edit
+  const handleCancel = () => {
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+    });
+
+    setEditId(null);
+    setError("");
+  };
+
+  // Delete
+  const handleDelete = async (id) => {
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this student?"
+    );
+
+    if (!confirmDelete) return;
+
     try {
       await axios.delete(`${API}/${id}`);
-      fetchStudents();
-    } catch (error) {
-      alert("Failed to delete student");
+      await fetchStudents();
+    } catch (err) {
+      console.error("Delete error:", err);
+      setError(
+        err.response?.data?.message || "Unable to delete student."
+      );
     }
   };
 
   return (
-    <div className="container">
-      <h1>Student Management System</h1>
-      <p className="subtitle">MERN Stack Simple Project</p>
+    <div className="app">
+      <div className="container">
+        <h1>Student Management System</h1>
 
-      <form onSubmit={addStudent} className="student-form">
-        <input
-          type="text"
-          placeholder="Student Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <form onSubmit={handleSubmit} className="student-form">
+          <h2>{editId ? "Edit Student" : "Add Student"}</h2>
 
-        <input
-          type="email"
-          placeholder="Student Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
+          <input
+            type="text"
+            name="name"
+            placeholder="Enter Name"
+            value={formData.name}
+            onChange={handleChange}
+          />
 
-        <input
-          type="text"
-          placeholder="Course"
-          value={course}
-          onChange={(e) => setCourse(e.target.value)}
-        />
+          <input
+            type="email"
+            name="email"
+            placeholder="Enter Email"
+            value={formData.email}
+            onChange={handleChange}
+          />
 
-        <button type="submit">Add Student</button>
-      </form>
+          <input
+            type="text"
+            name="phone"
+            placeholder="Enter Phone"
+            value={formData.phone}
+            onChange={handleChange}
+          />
 
-      <h2>Student List ({students.length})</h2>
+          <div className="form-buttons">
+            <button type="submit" className="submit-btn">
+              {editId ? "Update Student" : "Add Student"}
+            </button>
 
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Course</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {students.map((student) => (
-              <tr key={student._id}>
-                <td>{student.name}</td>
-                <td>{student.email}</td>
-                <td>{student.course}</td>
-                <td>
-                  <button
-                    className="delete-btn"
-                    onClick={() => deleteStudent(student._id)}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-
-            {students.length === 0 && (
-              <tr>
-                <td colSpan="4">No students added yet</td>
-              </tr>
+            {editId && (
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={handleCancel}
+              >
+                Cancel
+              </button>
             )}
-          </tbody>
-        </table>
+          </div>
+        </form>
+
+        {error && <p className="error">{error}</p>}
+
+        <h2>Student List</h2>
+
+        {loading ? (
+          <p>Loading students...</p>
+        ) : students.length === 0 ? (
+          <p>No students found.</p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {students.map((student) => (
+                  <tr key={student._id}>
+                    <td>{student.name}</td>
+                    <td>{student.email}</td>
+                    <td>{student.phone}</td>
+                    <td>
+                      <div className="action-buttons">
+                        <button
+                          className="edit-btn"
+                          onClick={() => handleEdit(student)}
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          className="delete-btn"
+                          onClick={() => handleDelete(student._id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
